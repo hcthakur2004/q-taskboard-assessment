@@ -104,68 +104,7 @@ STATUS=403
 {"error":"viewers cannot update tasks"}
 ```
 
-## 5. Part 3a Demo: Append-Only Comments
-
-```powershell
-$admin = Invoke-RestMethod -Uri 'http://localhost:3000/api/auth/login' `
-  -Method Post `
-  -ContentType 'application/json' `
-  -Body '{"email":"meera@taskboard.dev","password":"password123"}'
-
-$adminHeaders = @{ Authorization = "Bearer $($admin.token)" }
-$projects = Invoke-RestMethod -Uri 'http://localhost:3000/api/projects' -Headers $adminHeaders
-$project = $projects.projects | Where-Object { $_.name -eq 'Q3 Launch' } | Select-Object -First 1
-$tasks = Invoke-RestMethod -Uri "http://localhost:3000/api/projects/$($project.id)/tasks" -Headers $adminHeaders
-$task = $tasks.tasks | Select-Object -First 1
-
-$created = Invoke-RestMethod -Uri "http://localhost:3000/api/tasks/$($task.id)/comments" `
-  -Method Post `
-  -ContentType 'application/json' `
-  -Headers $adminHeaders `
-  -Body '{"body":"API verification comment"}'
-```
-
-```text
-task=cmq68j0ig000xdxnsrffxz8cd project=cmq68j0hk0006dxns61nrmfhi
-admin_post_status=201 body=API verification comment author=meera@taskboard.dev
-viewer_read_count=1
-viewer_post_status=403
-{"error":"viewers cannot post comments"}
-```
-
-## 6. Part 3b Demo: Activity Feed
-
-```powershell
-$created = Invoke-RestMethod -Uri "http://localhost:3000/api/projects/$($project.id)/tasks" `
-  -Method Post `
-  -ContentType 'application/json' `
-  -Headers $adminHeaders `
-  -Body '{"title":"Activity verification task","status":"todo"}'
-
-$patched = Invoke-RestMethod -Uri "http://localhost:3000/api/tasks/$($created.task.id)" `
-  -Method Patch `
-  -ContentType 'application/json' `
-  -Headers $adminHeaders `
-  -Body '{"status":"review"}'
-
-$comment = Invoke-RestMethod -Uri "http://localhost:3000/api/tasks/$($created.task.id)/comments" `
-  -Method Post `
-  -ContentType 'application/json' `
-  -Headers $adminHeaders `
-  -Body '{"body":"Activity verification comment"}'
-
-$feed = Invoke-RestMethod -Uri "http://localhost:3000/api/projects/$($project.id)/activity" `
-  -Headers $adminHeaders
-```
-
-```text
-created_task=cmq78en6d0001dxw4eb083v8k status_after=review comment=cmq78erdl0006dxw4esfolzmt
-activity type=comment_added actor=meera@taskboard.dev task=Activity verification task
-activity type=task_status_changed actor=meera@taskboard.dev task=Activity verification task
-activity type=task_created actor=meera@taskboard.dev task=Activity verification task
-```
-
-## 7. Part 3c Demo: Airtable Export
+## 5. Part 3c Demo: Airtable Export
 
 Airtable base opened for verification:
 
@@ -215,6 +154,67 @@ Viewer authorization check:
 ```text
 viewer_status=403
 {"error":"viewers cannot export tasks"}
+```
+
+## 6. Part 3a Demo: Append-Only Comments
+
+```powershell
+$admin = Invoke-RestMethod -Uri 'http://localhost:3000/api/auth/login' `
+  -Method Post `
+  -ContentType 'application/json' `
+  -Body '{"email":"meera@taskboard.dev","password":"password123"}'
+
+$adminHeaders = @{ Authorization = "Bearer $($admin.token)" }
+$projects = Invoke-RestMethod -Uri 'http://localhost:3000/api/projects' -Headers $adminHeaders
+$project = $projects.projects | Where-Object { $_.name -eq 'Q3 Launch' } | Select-Object -First 1
+$tasks = Invoke-RestMethod -Uri "http://localhost:3000/api/projects/$($project.id)/tasks" -Headers $adminHeaders
+$task = $tasks.tasks | Select-Object -First 1
+
+$created = Invoke-RestMethod -Uri "http://localhost:3000/api/tasks/$($task.id)/comments" `
+  -Method Post `
+  -ContentType 'application/json' `
+  -Headers $adminHeaders `
+  -Body '{"body":"API verification comment"}'
+```
+
+```text
+task=cmq68j0ig000xdxnsrffxz8cd project=cmq68j0hk0006dxns61nrmfhi
+admin_post_status=201 body=API verification comment author=meera@taskboard.dev
+viewer_read_count=1
+viewer_post_status=403
+{"error":"viewers cannot post comments"}
+```
+
+## 7. Part 3b Demo: Activity Feed
+
+```powershell
+$created = Invoke-RestMethod -Uri "http://localhost:3000/api/projects/$($project.id)/tasks" `
+  -Method Post `
+  -ContentType 'application/json' `
+  -Headers $adminHeaders `
+  -Body '{"title":"Activity verification task","status":"todo"}'
+
+$patched = Invoke-RestMethod -Uri "http://localhost:3000/api/tasks/$($created.task.id)" `
+  -Method Patch `
+  -ContentType 'application/json' `
+  -Headers $adminHeaders `
+  -Body '{"status":"review"}'
+
+$comment = Invoke-RestMethod -Uri "http://localhost:3000/api/tasks/$($created.task.id)/comments" `
+  -Method Post `
+  -ContentType 'application/json' `
+  -Headers $adminHeaders `
+  -Body '{"body":"Activity verification comment"}'
+
+$feed = Invoke-RestMethod -Uri "http://localhost:3000/api/projects/$($project.id)/activity" `
+  -Headers $adminHeaders
+```
+
+```text
+created_task=cmq78en6d0001dxw4eb083v8k status_after=review comment=cmq78erdl0006dxw4esfolzmt
+activity type=comment_added actor=meera@taskboard.dev task=Activity verification task
+activity type=task_status_changed actor=meera@taskboard.dev task=Activity verification task
+activity type=task_created actor=meera@taskboard.dev task=Activity verification task
 ```
 
 ## 8. Final Test Run
