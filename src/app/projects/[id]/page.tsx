@@ -4,11 +4,17 @@ import { use, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { apiFetch, getToken } from "@/lib/api-client";
+import { apiFetch, getStoredUser, getToken } from "@/lib/api-client";
 import { Header } from "@/components/Header";
 import { StatusColumn } from "@/components/StatusColumn";
 import { TaskDetail } from "@/components/TaskDetail";
-import type { ApiActivity, ApiProjectDetail, ApiTask, TaskStatus } from "@/types";
+import type {
+  AirtableTaskExport,
+  ApiActivity,
+  ApiProjectDetail,
+  ApiTask,
+  TaskStatus,
+} from "@/types";
 import { STATUS_ORDER } from "@/types";
 
 type PageProps = { params: Promise<{ id: string }> };
@@ -22,6 +28,7 @@ export default function ProjectPage({ params }: PageProps) {
   const [newTitle, setNewTitle] = useState("");
   const [newColumn, setNewColumn] = useState<TaskStatus>("todo");
   const [error, setError] = useState<string | null>(null);
+  const [exportMessage, setExportMessage] = useState<string | null>(null);
 
   useEffect(() => {
     if (!getToken()) router.replace("/login");
@@ -50,6 +57,22 @@ export default function ProjectPage({ params }: PageProps) {
     onError: (err) => setError(err instanceof Error ? err.message : "create failed"),
   });
 
+  const exportTasks = useMutation({
+    mutationFn: () =>
+      apiFetch<{ export: AirtableTaskExport }>(`/api/projects/${id}/export/airtable`, {
+        method: "POST",
+      }),
+    onSuccess: (data) => {
+      const exported = data.export.created + data.export.updated;
+      setExportMessage(
+        `exported ${exported}/${data.export.total} tasks to Airtable` +
+          (data.export.failed ? ` (${data.export.failed} failed)` : ""),
+      );
+    },
+    onError: (err) =>
+      setExportMessage(err instanceof Error ? err.message : "Airtable export failed"),
+  });
+
   const project = data?.project;
   const tasksByStatus: Record<TaskStatus, ApiTask[]> = {
     todo: [],
@@ -62,6 +85,11 @@ export default function ProjectPage({ params }: PageProps) {
       tasksByStatus[t.status].push(t);
     }
   }
+  const currentUser = getStoredUser();
+  const currentMembership = currentUser
+    ? project?.memberships.find((m) => m.user.id === currentUser.id)
+    : null;
+  const canExport = currentMembership?.role === "admin" || currentMembership?.role === "member";
 
   return (
     <div className="min-h-screen">
@@ -84,7 +112,7 @@ export default function ProjectPage({ params }: PageProps) {
 
         {project && (
           <>
-            <div className="flex items-start justify-between mt-4 mb-8">
+            <div className="flex items-start justify-between gap-4 mt-4 mb-8">
               <div>
                 <h1 className="text-2xl font-semibold">{project.name}</h1>
                 {project.description && (
@@ -96,6 +124,24 @@ export default function ProjectPage({ params }: PageProps) {
                   owner: {project.owner.name} · {project.memberships.length} members
                 </p>
               </div>
+              {canExport && (
+                <div className="text-right">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setExportMessage(null);
+                      exportTasks.mutate();
+                    }}
+                    disabled={exportTasks.isPending}
+                    className="bg-accent hover:bg-indigo-500 text-white text-sm font-medium rounded-md px-4 py-2 disabled:opacity-50"
+                  >
+                    {exportTasks.isPending ? "exporting..." : "export to Airtable"}
+                  </button>
+                  {exportMessage && (
+                    <p className="text-xs text-muted mt-2 max-w-xs">{exportMessage}</p>
+                  )}
+                </div>
+              )}
             </div>
 
             <section className="bg-surface border border-border rounded-lg p-4 mb-6">
