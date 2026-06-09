@@ -32,12 +32,51 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     return forbidden("viewers cannot update tasks");
   }
 
-  const task = await prisma.task.update({
-    where: { id },
-    data: parsed.data,
-    include: {
-      assignee: { select: { id: true, name: true, email: true } },
-    },
+  const task = await prisma.$transaction(async (tx) => {
+    const updated = await tx.task.update({
+      where: { id },
+      data: parsed.data,
+      include: {
+        assignee: { select: { id: true, name: true, email: true } },
+      },
+    });
+
+    const activity = [];
+    if (parsed.data.status && parsed.data.status !== existing.status) {
+      activity.push({
+        projectId: existing.projectId,
+        actorId: user.id,
+        type: "task_status_changed" as const,
+        taskId: existing.id,
+        metadata: {
+          title: existing.title,
+          from: existing.status,
+          to: parsed.data.status,
+        },
+      });
+    }
+    if (
+      Object.prototype.hasOwnProperty.call(parsed.data, "assigneeId") &&
+      parsed.data.assigneeId !== existing.assigneeId
+    ) {
+      activity.push({
+        projectId: existing.projectId,
+        actorId: user.id,
+        type: "task_assignee_changed" as const,
+        taskId: existing.id,
+        metadata: {
+          title: existing.title,
+          from: existing.assigneeId,
+          to: parsed.data.assigneeId ?? null,
+        },
+      });
+    }
+
+    if (activity.length > 0) {
+      await tx.activity.createMany({ data: activity });
+    }
+
+    return updated;
   });
 
   return NextResponse.json({ task });

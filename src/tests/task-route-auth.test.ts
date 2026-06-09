@@ -4,15 +4,21 @@ import { NextResponse, type NextRequest } from "next/server";
 const mocks = vi.hoisted(() => ({
   currentUser: { id: "user_1", email: "user@example.com", name: "User One" },
   membership: null as null | { role: "admin" | "member" | "viewer" },
+  transaction: vi.fn(),
   findUnique: vi.fn(),
   update: vi.fn(),
+  activityCreateMany: vi.fn(),
 }));
 
 vi.mock("@/lib/prisma", () => ({
   prisma: {
+    $transaction: mocks.transaction,
     task: {
       findUnique: mocks.findUnique,
       update: mocks.update,
+    },
+    activity: {
+      createMany: mocks.activityCreateMany,
     },
   },
 }));
@@ -47,6 +53,12 @@ describe("PATCH /api/tasks/:id authorization", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.membership = null;
+    mocks.transaction.mockImplementation((callback) =>
+      callback({
+        task: { update: mocks.update },
+        activity: { createMany: mocks.activityCreateMany },
+      }),
+    );
     mocks.findUnique.mockResolvedValue({ id: "task_1", projectId: "project_1" });
     mocks.update.mockResolvedValue({
       id: "task_1",
@@ -55,6 +67,7 @@ describe("PATCH /api/tasks/:id authorization", () => {
       status: "done",
       assignee: null,
     });
+    mocks.activityCreateMany.mockResolvedValue({ count: 0 });
   });
 
   it("rejects non-members before updating the task", async () => {
@@ -93,6 +106,21 @@ describe("PATCH /api/tasks/:id authorization", () => {
       include: {
         assignee: { select: { id: true, name: true, email: true } },
       },
+    });
+    expect(mocks.activityCreateMany).toHaveBeenCalledWith({
+      data: [
+        {
+          projectId: "project_1",
+          actorId: "user_1",
+          type: "task_status_changed",
+          taskId: "task_1",
+          metadata: {
+            title: undefined,
+            from: undefined,
+            to: "done",
+          },
+        },
+      ],
     });
   });
 });

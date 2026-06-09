@@ -63,26 +63,44 @@ export async function POST(req: NextRequest, { params }: Params) {
 
   const status = parsed.data.status ?? "todo";
 
-  // place new task at the end of its column
-  const last = await prisma.task.findFirst({
-    where: { projectId, status },
-    orderBy: { position: "desc" },
-    select: { position: true },
-  });
+  const task = await prisma.$transaction(async (tx) => {
+    // place new task at the end of its column
+    const last = await tx.task.findFirst({
+      where: { projectId, status },
+      orderBy: { position: "desc" },
+      select: { position: true },
+    });
 
-  const task = await prisma.task.create({
-    data: {
-      projectId,
-      title: parsed.data.title,
-      description: parsed.data.description,
-      status,
-      assigneeId: parsed.data.assigneeId ?? null,
-      createdById: user.id,
-      position: (last?.position ?? -1) + 1,
-    },
-    include: {
-      assignee: { select: { id: true, name: true, email: true } },
-    },
+    const created = await tx.task.create({
+      data: {
+        projectId,
+        title: parsed.data.title,
+        description: parsed.data.description,
+        status,
+        assigneeId: parsed.data.assigneeId ?? null,
+        createdById: user.id,
+        position: (last?.position ?? -1) + 1,
+      },
+      include: {
+        assignee: { select: { id: true, name: true, email: true } },
+      },
+    });
+
+    await tx.activity.create({
+      data: {
+        projectId,
+        actorId: user.id,
+        type: "task_created",
+        taskId: created.id,
+        metadata: {
+          title: created.title,
+          status: created.status,
+          assigneeId: created.assigneeId,
+        },
+      },
+    });
+
+    return created;
   });
 
   return NextResponse.json({ task }, { status: 201 });

@@ -60,15 +60,32 @@ export async function POST(req: NextRequest, { params }: Params) {
   const parsed = createCommentSchema.safeParse(body);
   if (!parsed.success) return badRequest("invalid input", parsed.error.flatten());
 
-  const comment = await prisma.comment.create({
-    data: {
-      taskId,
-      authorId: user.id,
-      body: parsed.data.body,
-    },
-    include: {
-      author: { select: { id: true, name: true, email: true } },
-    },
+  const comment = await prisma.$transaction(async (tx) => {
+    const created = await tx.comment.create({
+      data: {
+        taskId,
+        authorId: user.id,
+        body: parsed.data.body,
+      },
+      include: {
+        author: { select: { id: true, name: true, email: true } },
+      },
+    });
+
+    await tx.activity.create({
+      data: {
+        projectId: task.projectId,
+        actorId: user.id,
+        type: "comment_added",
+        taskId,
+        commentId: created.id,
+        metadata: {
+          bodyPreview: created.body.slice(0, 120),
+        },
+      },
+    });
+
+    return created;
   });
 
   return NextResponse.json({ comment }, { status: 201 });

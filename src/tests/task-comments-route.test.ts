@@ -4,19 +4,25 @@ import { NextResponse, type NextRequest } from "next/server";
 const mocks = vi.hoisted(() => ({
   currentUser: { id: "user_1", email: "user@example.com", name: "User One" },
   membership: null as null | { role: "admin" | "member" | "viewer" },
+  transaction: vi.fn(),
   taskFindUnique: vi.fn(),
   commentFindMany: vi.fn(),
   commentCreate: vi.fn(),
+  activityCreate: vi.fn(),
 }));
 
 vi.mock("@/lib/prisma", () => ({
   prisma: {
+    $transaction: mocks.transaction,
     task: {
       findUnique: mocks.taskFindUnique,
     },
     comment: {
       findMany: mocks.commentFindMany,
       create: mocks.commentCreate,
+    },
+    activity: {
+      create: mocks.activityCreate,
     },
   },
 }));
@@ -51,6 +57,12 @@ describe("/api/tasks/:id/comments", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.membership = { role: "member" };
+    mocks.transaction.mockImplementation((callback) =>
+      callback({
+        comment: { create: mocks.commentCreate },
+        activity: { create: mocks.activityCreate },
+      }),
+    );
     mocks.taskFindUnique.mockResolvedValue({ projectId: "project_1" });
     mocks.commentFindMany.mockResolvedValue([
       {
@@ -70,6 +82,7 @@ describe("/api/tasks/:id/comments", () => {
       createdAt: new Date("2026-01-01T00:01:00.000Z"),
       author: mocks.currentUser,
     });
+    mocks.activityCreate.mockResolvedValue({ id: "activity_1" });
   });
 
   it("lists comments chronologically for project viewers", async () => {
@@ -105,6 +118,18 @@ describe("/api/tasks/:id/comments", () => {
       },
       include: {
         author: { select: { id: true, name: true, email: true } },
+      },
+    });
+    expect(mocks.activityCreate).toHaveBeenCalledWith({
+      data: {
+        projectId: "project_1",
+        actorId: "user_1",
+        type: "comment_added",
+        taskId: "task_1",
+        commentId: "comment_2",
+        metadata: {
+          bodyPreview: "New comment",
+        },
       },
     });
   });

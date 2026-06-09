@@ -30,6 +30,25 @@ export type ApiComment = {
   author: ApiUser;
 };
 
+export type ActivityType =
+  | "task_created"
+  | "task_status_changed"
+  | "task_assignee_changed"
+  | "comment_added";
+
+export type ApiActivity = {
+  id: string;
+  projectId: string;
+  actorId: string;
+  type: ActivityType;
+  taskId: string | null;
+  commentId: string | null;
+  metadata: Record<string, unknown> | null;
+  createdAt: string;
+  actor: ApiUser;
+  task?: Pick<ApiTask, "id" | "title"> | null;
+};
+
 export type ApiProjectMember = {
   id: string;
   role: Role;

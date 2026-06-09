@@ -8,7 +8,7 @@ import { apiFetch, getToken } from "@/lib/api-client";
 import { Header } from "@/components/Header";
 import { StatusColumn } from "@/components/StatusColumn";
 import { TaskDetail } from "@/components/TaskDetail";
-import type { ApiProjectDetail, ApiTask, TaskStatus } from "@/types";
+import type { ApiActivity, ApiProjectDetail, ApiTask, TaskStatus } from "@/types";
 import { STATUS_ORDER } from "@/types";
 
 type PageProps = { params: Promise<{ id: string }> };
@@ -30,6 +30,11 @@ export default function ProjectPage({ params }: PageProps) {
   const { data, isLoading, error: queryError } = useQuery({
     queryKey: ["project", id],
     queryFn: () => apiFetch<{ project: ApiProjectDetail }>(`/api/projects/${id}`),
+  });
+
+  const activity = useQuery({
+    queryKey: ["project-activity", id],
+    queryFn: () => apiFetch<{ activity: ApiActivity[] }>(`/api/projects/${id}/activity`),
   });
 
   const createTask = useMutation({
@@ -164,6 +169,39 @@ export default function ProjectPage({ params }: PageProps) {
                 ))}
               </ul>
             </section>
+
+            <section className="mt-10">
+              <h2 className="text-sm font-medium mb-3">recent activity</h2>
+              <div className="bg-surface border border-border rounded-lg divide-y divide-border">
+                {activity.isLoading && (
+                  <p className="px-4 py-3 text-sm text-muted">loading activity...</p>
+                )}
+                {activity.error && (
+                  <p className="px-4 py-3 text-sm text-red-400">
+                    {activity.error instanceof Error
+                      ? activity.error.message
+                      : "failed to load activity"}
+                  </p>
+                )}
+                {activity.data && activity.data.activity.length === 0 && (
+                  <p className="px-4 py-3 text-sm text-muted">no activity yet.</p>
+                )}
+                {activity.data &&
+                  activity.data.activity.map((item) => (
+                    <div key={item.id} className="px-4 py-3 text-sm">
+                      <div className="flex items-start justify-between gap-4">
+                        <p>
+                          <span className="font-medium">{item.actor.name}</span>{" "}
+                          {formatActivity(item)}
+                        </p>
+                        <time className="text-xs text-muted whitespace-nowrap">
+                          {new Date(item.createdAt).toLocaleString()}
+                        </time>
+                      </div>
+                    </div>
+                  ))}
+              </div>
+            </section>
           </>
         )}
       </main>
@@ -178,4 +216,25 @@ export default function ProjectPage({ params }: PageProps) {
       )}
     </div>
   );
+}
+
+function formatActivity(item: ApiActivity) {
+  const title = item.task?.title || getMetadataString(item, "title") || "a task";
+  switch (item.type) {
+    case "task_created":
+      return `created ${title}`;
+    case "task_status_changed":
+      return `moved ${title} from ${getMetadataString(item, "from")} to ${getMetadataString(item, "to")}`;
+    case "task_assignee_changed":
+      return `changed the assignee on ${title}`;
+    case "comment_added":
+      return `commented on ${title}`;
+    default:
+      return "updated the project";
+  }
+}
+
+function getMetadataString(item: ApiActivity, key: string) {
+  const value = item.metadata?.[key];
+  return typeof value === "string" ? value : null;
 }
